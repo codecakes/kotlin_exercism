@@ -95,8 +95,8 @@ object PigLatin {
                 Pair(letter, word.substringAfter(letter))
             } else Pair(letter, "0")
         }
-        return if (suffixStr == "0" || suffixStr == lastSuffix) prefixStr
-        else if (suffixStr == "") prefixStr + letter
+        return if (suffixStr == "") prefixStr + letter
+        else if (suffixStr == "0" || suffixStr == lastSuffix) prefixStr
         else checkCluster(suffixStr, suffixStr, prefixStr + letter, isConsonant)
     }
 
