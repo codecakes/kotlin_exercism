@@ -26,7 +26,6 @@ val vowelSoundingInitialInWord: Set<String> = setOf(
     "a", "e", "i", "o", "u", "x", "y"
 )
 
-const val QU = "qu"
 const val SUFFIX = "ay"
 
 
@@ -78,7 +77,7 @@ sealed interface ValidateRule<T: RuleChecker> {
     fun validateRule(word: String, ruleChecker: (String) -> Boolean): Boolean
 }
 
-sealed class ValidateRuleImpl<T: RuleChecker> {
+sealed class ValidateRuleImpl {
 
     // Create a static method
     companion object: ValidateRule<RuleChecker>  {
@@ -180,18 +179,24 @@ object RuleCheck4Impl: CommonConsonantHelper(), RuleChecker4 {
      *  as the second letter in a two-letter word it
      */
     override fun checkRule4(word: String): Boolean {
+        if (word.first() == 'y' || !word.contains("y")) {
+            return false
+        }
         val initialConsonants: MutableList<Char> = mutableListOf()
-        val seqConsonant = commonConsonantCheckSequence(word)
+        val seqConsonant = commonConsonantCheckSequence(word).takeWhile {
+            it.isLetter() && it != 'y'
+        }
         val isTwoLetterEndsWithY = word.length == 2 && word.last() == 'y'
         if (isTwoLetterEndsWithY) {
             return true
         }
         // Lazy load the char sequence of consonants if any.
         initialConsonants.addAll(0, seqConsonant.toList())
-        if (initialConsonants.size > 0 && initialConsonants.contains('y')) {
-            return true
-        }
-        return false
+        return (
+            initialConsonants.size > 0 &&
+            word.subSequence(initialConsonants.size, word.length)
+                .contains('y', ignoreCase = true)
+        )
     }
 
     /**
@@ -215,19 +220,27 @@ object Rule1Impl : Rule1 {
     }
 }
 
-object Rule2Impl : Rule2 {
+object Rule2Impl: CommonConsonantHelper(), Rule2 {
+
     override fun moveConsonantEnd(word: String): String {
-        return word
+        val firstConsonantSequence: List<Char> = commonConsonantCheckSequence(word).toList()
+        return word.subSequence(
+            firstConsonantSequence.size, word.length).toString() +
+                firstConsonantSequence.joinToString("") +
+                SUFFIX
     }
 
     override fun invoke(word: String): String {
         return moveConsonantEnd(word)
     }
+
 }
 
-object Rule3Impl : Rule3 {
+object Rule3Impl: CommonConsonantHelper(), Rule3 {
     override fun moveConsonantQu(word: String): String {
-        return word
+        val firstConsonantSequence: List<Char> = commonConsonantCheckSequence(word).toList()
+        val newWordSequence: CharSequence = word.subSequence(firstConsonantSequence.size, word.length)
+        return "${word.subSequence(firstConsonantSequence.size+1, word.length)}${firstConsonantSequence.joinToString("")}${newWordSequence.first()}${SUFFIX}"
     }
 
     override fun invoke(word: String): String {
@@ -235,9 +248,13 @@ object Rule3Impl : Rule3 {
     }
 }
 
-object Rule4Impl : Rule4 {
+object Rule4Impl: CommonConsonantHelper(), Rule4 {
     override fun makeVowelYAy(word: String): String {
-        return word
+        val beforeYConsonantSequence: Sequence<Char> = commonConsonantCheckSequence(word).takeWhile {
+            it.isLetter() && it != 'y'
+        }
+        val afterYWord: String = word.subSequence(beforeYConsonantSequence.count(), word.length).toString()
+        return "${afterYWord}${beforeYConsonantSequence.joinToString("")}${SUFFIX}"
     }
 
     override fun invoke(word: String): String {
@@ -245,7 +262,7 @@ object Rule4Impl : Rule4 {
     }
 }
 
-internal fun ruleMapper(): Map<RuleChecker, Rule> = mapOf(
+val ruleMapper: Map<RuleChecker, Rule> = mapOf(
     RuleCheck4Impl to Rule4Impl,
     RuleCheck3Impl to Rule3Impl,
     RuleCheck2Impl to Rule2Impl,
@@ -253,32 +270,35 @@ internal fun ruleMapper(): Map<RuleChecker, Rule> = mapOf(
 )
 
 
-/** Memoizing cache function helper
- * Could have done the easier way but makes for good practice.
+/**
+ * Memoizing cache function helper
+ * Could have done the easier way but trying to act over-smart makes for good practice.
  */
 internal fun <
         K: KFunction0<Map<RuleChecker, Rule>>,
-        V: Map<RuleChecker, Rule>> cacheFunction(
-    cache: MutableMap<K, V>, theFunction: K): V {
-    val safeMapping: Map<RuleChecker, Rule> = theFunction()
-    return cache.getOrPut(theFunction) {
-        @Suppress("UNCHECKED_CAST")
-        safeMapping as V
-    }
+        V: Map<RuleChecker, Rule>,
+        X: MutableMap<RuleChecker, Rule>,
+        > cacheFunction(cache: MutableMap<K, V>, theFunction: K): X {
+    @Suppress("UNCHECKED_CAST") val hashMapping = cache.getOrPut(theFunction) { theFunction.invoke() as V }
+    @Suppress("UNCHECKED_CAST")
+    return hashMapping.toMutableMap() as X
 }
 
 
 object PigLatin {
 
     private val cache: MutableMap<KFunction0<Map<RuleChecker, Rule>>, Map<RuleChecker, Rule>> = mutableMapOf()
-    private fun rulesMapper(): MutableMap<RuleChecker, Rule>  = cacheFunction(cache, ::ruleMapper).toMutableMap()
+
+    private fun getRuleMap(): Map<RuleChecker, Rule> = ruleMapper
+    private fun rulesMapper(): MutableMap<RuleChecker, Rule> = cacheFunction(cache, ::getRuleMap)
+//    private fun rulesMapper(): MutableMap<RuleChecker, Rule>  = cacheFunction(cache, ::ruleMapper).toMutableMap()
 
 //    private fun rulesMapper(): MutableMap<RuleChecker, Rule> = ruleMapper().toMutableMap()
 
     /**
      * Translates English to Pig Latin!
      *
-     * @param word String a word
+     * @param phrase Phrase to translate to Pig Latin
      * @return Pig Latin sentence.
      * @see PigLatin.pigify
      */
@@ -290,7 +310,7 @@ object PigLatin {
     /**
      * @param word Word
      * @return Pig Latin word.
-     * @see PigLatin.checkCluster
+     * @see PigLatin.pigify
      */
     private fun pigify(word: String): String {
         return recRulesMatch(word, rulesMapper())
