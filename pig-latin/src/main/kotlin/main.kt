@@ -1,3 +1,5 @@
+package main.kotlin
+
 import PigLatin.translate
 
 fun main() {
