@@ -62,7 +62,7 @@ class PigLatinTest(val input: String, val expectedOutput: String) {
             arrayOf("Bryology", "yologybray"),
 
 
-            // Y as second letter in two letter word
+            // Y as second letter in two-letter word
             arrayOf("my", "ymay"),
 
             // Phrases are translated
